@@ -6,7 +6,7 @@ namespace App\Controllers;
 
 use App\Entities\RetoReal;
 use App\Repositories\RetoRealRepository;
-use App\config\Database; // Necesario para interactuar con tablas relacionadas (ej. equipo_reto)
+use App\config\Database; // Necesario para la conexión a la base de datos para la tabla pivote
 use PDO;
 use Exception;
 
@@ -22,211 +22,178 @@ class RetoRealController
     }
 
     /**
-     * Maneja las solicitudes HTTP entrantes y las dirige al método apropiado.
-     * Simula un enrutador básico para la API.
+     * Maneja todas las solicitudes HTTP para el recurso de RetoReal.
+     * Implementa un enrutamiento interno basado en el método HTTP y parámetros.
      */
-    public function handleRequest(string $method, string $path, array $params = []): void
+    public function handle(): void
     {
-        switch ($method) {
-            case 'POST':
-                if ($path === '/retos') {
-                    $this->createReto();
-                }
-                break;
-            case 'GET':
-                if ($path === '/retos') {
-                    $this->getRetos();
-                } elseif (preg_match('/^\/retos\/(\d+)$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
-                    $this->getRetoById($retoId);
-                } elseif (preg_match('/^\/retos\/(\d+)\/equipos$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
+        header('Content-Type: application/json');
+        $method = $_SERVER['REQUEST_METHOD'];
+        // Para POST, PUT, DELETE, el payload se lee del cuerpo de la solicitud
+        $payload = json_decode(file_get_contents('php://input'), true);
+
+        // -- Solicitudes GET --
+        if ($method === 'GET') {
+            if (isset($_GET['action'])) {
+                // Específicamente para /retos/{id}/equipos (simulado con ?action=get_equipos_by_reto&id={id})
+                if ($_GET['action'] === 'get_equipos_by_reto' && isset($_GET['id'])) {
+                    $retoId = (int)$_GET['id'];
                     $this->getEquiposByRetoId($retoId);
+                    return;
                 }
-                break;
-            case 'PUT':
-                if (preg_match('/^\/retos\/(\d+)$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
-                    $this->updateReto($retoId);
-                }
-                break;
-            case 'DELETE':
-                if (preg_match('/^\/retos\/(\d+)$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
-                    $this->deleteReto($retoId);
-                }
-                break;
-            default:
-                $this->sendResponse(405, ['message' => 'Method Not Allowed']);
-                break;
-        }
-    }
-
-    /**
-     * Crea un nuevo reto real.
-     * Endpoint: POST /retos
-     * Body: { "tipo": "retoReal", "titulo": "...", "descripcion": "...", "dificultad": "...", "areasConocimiento": [...], "entidadColaboradora": "..." }
-     */
-    public function createReto(): void
-    {
-        $input = json_decode(file_get_contents('php://input'), true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->sendResponse(400, ['message' => 'Invalid JSON input.']);
-            return;
-        }
-
-        // Validación básica de campos requeridos para RetoReal
-        $requiredFields = ['tipo', 'titulo', 'descripcion', 'dificultad', 'areasConocimiento', 'entidadColaboradora'];
-        foreach ($requiredFields as $field) {
-            if (!isset($input[$field])) {
-                $this->sendResponse(400, ['message' => "Missing required field: {$field}"]);
+            } elseif (isset($_GET['id'])) {
+                // Obtener un reto real por ID: GET /retos?id={id}
+                $reto = $this->retoRealRepository->findById((int)$_GET['id']);
+                echo json_encode($reto ? $this->retoRealToArray($reto) : null);
                 return;
+            } else {
+                // Listar todos los retos reales: GET /retos
+                $list = array_map(
+                    [$this, 'retoRealToArray'],
+                    $this->retoRealRepository->findAll()
+                );
+                echo json_encode($list);
             }
-        }
-
-        if ($input['tipo'] !== 'retoReal') {
-            $this->sendResponse(400, ['message' => 'This controller only handles "retoReal" type.']);
             return;
         }
 
-        try {
-            // Se asume que el ID (retoId) es AUTO_INCREMENT en la DB y no se pasa al constructor inicialmente.
-            // Si tu entidad RetoReal toma un ID en el constructor, ajusta esta línea.
-            $reto = new RetoReal(
-                0, // ID placeholder, será asignado por la DB
-                $input['tipo'],
-                $input['titulo'],
-                $input['descripcion'],
-                $input['dificultad'],
-                $input['areasConocimiento'],
-                $input['entidadColaboradora']
-            );
+        // -- Solicitudes POST --
+        if ($method === 'POST') {
+            try {
+                // Validar que el payload no sea nulo y contenga los campos esperados
+                if (json_last_error() !== JSON_ERROR_NONE ||
+                    !isset($payload['tipo'], $payload['titulo'], $payload['descripcion'],
+                           $payload['dificultad'], $payload['areasConocimiento'], $payload['entidadColaboradora'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Datos inválidos o incompletos para crear un reto real.']);
+                    return;
+                }
 
-            if ($this->retoRealRepository->create($reto)) {
-                // Si el ID es auto_increment, el repositorio podría devolverlo o podrías recuperarlo con lastInsertId()
-                $this->sendResponse(201, ['message' => 'Reto Real creado exitosamente.']);
-            } else {
-                $this->sendResponse(500, ['message' => 'Error al crear el Reto Real.']);
+                if ($payload['tipo'] !== 'retoReal') {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Este controlador solo maneja el tipo "retoReal" para la creación.']);
+                    return;
+                }
+
+                $retoReal = new RetoReal(
+                    0, // ID placeholder, será asignado por la DB si es AUTO_INCREMENT
+                    $payload['tipo'],
+                    $payload['titulo'],
+                    $payload['descripcion'],
+                    $payload['dificultad'],
+                    $payload['areasConocimiento'],
+                    $payload['entidadColaboradora']
+                );
+
+                echo json_encode(['success' => $this->retoRealRepository->create($retoReal)]);
+            } catch (Exception $e) {
+                http_response_code(400); // 400 Bad Request por problemas de datos o 500 para otros errores
+                echo json_encode(['error' => 'Error al crear reto real: ' . $e->getMessage()]);
             }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Obtiene un reto real por su ID.
-     * Endpoint: GET /retos/{id}
-     */
-    public function getRetoById(int $id): void
-    {
-        try {
-            $reto = $this->retoRealRepository->findById($id);
-            if ($reto) {
-                $this->sendResponse(200, $reto);
-            } else {
-                $this->sendResponse(404, ['message' => 'Reto Real no encontrado.']);
-            }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Actualiza un reto real existente.
-     * Endpoint: PUT /retos/{id}
-     * Body: { "titulo": "...", "descripcion": "...", "dificultad": "...", "areasConocimiento": [...], "entidadColaboradora": "..." }
-     */
-    public function updateReto(int $id): void
-    {
-        $input = json_decode(file_get_contents('php://input'), true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->sendResponse(400, ['message' => 'Invalid JSON input.']);
             return;
         }
 
-        try {
-            // Recuperar el reto existente para actualizar sus propiedades
-            $reto = $this->retoRealRepository->findById($id);
-            if (!$reto) {
-                $this->sendResponse(404, ['message' => 'Reto Real no encontrado para actualizar.']);
-                return;
-            }
+        // -- Solicitudes PUT --
+        if ($method === 'PUT') {
+            try {
+                // Validar que el payload no sea nulo y contenga el ID
+                if (json_last_error() !== JSON_ERROR_NONE || !isset($payload['id'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Datos inválidos o ID no proporcionado para la actualización.']);
+                    return;
+                }
+                
+                $id = (int)$payload['id'];
+                if ($id === 0) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'ID de reto real no válido para la actualización.']);
+                    return;
+                }
 
-            // Actualizar solo los campos proporcionados en el input
-            if (isset($input['titulo'])) {
-                $reto->setTitulo($input['titulo']);
-            }
-            if (isset($input['descripcion'])) {
-                $reto->setDescripcion($input['descripcion']);
-            }
-            if (isset($input['dificultad'])) {
-                $reto->setDificultad($input['dificultad']);
-            }
-            if (isset($input['areasConocimiento'])) {
-                $reto->setAreasConocimiento($input['areasConocimiento']);
-            }
-            if (isset($input['entidadColaboradora'])) {
-                $reto->setEntidadColaboradora($input['entidadColaboradora']);
-            }
-            // El 'tipo' no debería cambiar una vez que el reto es creado (retoReal vs retoExperimental)
-            // El 'retoId' también es el mismo
+                $existing = $this->retoRealRepository->findById($id);
 
-            if ($this->retoRealRepository->update($reto)) {
-                $this->sendResponse(200, ['message' => 'Reto Real actualizado exitosamente.']);
-            } else {
-                $this->sendResponse(500, ['message' => 'Error al actualizar el Reto Real.']);
+                if (!$existing) {
+                    http_response_code(404);
+                    echo json_encode(['error' => 'Reto real no encontrado para actualizar.']);
+                    return;
+                }
+
+                // Actualizar solo los campos proporcionados en el payload
+                if (isset($payload['titulo'])) $existing->setTitulo($payload['titulo']);
+                if (isset($payload['descripcion'])) $existing->setDescripcion($payload['descripcion']);
+                if (isset($payload['dificultad'])) $existing->setDificultad($payload['dificultad']);
+                if (isset($payload['areasConocimiento'])) $existing->setAreasConocimiento($payload['areasConocimiento']);
+                if (isset($payload['entidadColaboradora'])) $existing->setEntidadColaboradora($payload['entidadColaboradora']);
+
+                echo json_encode(['success' => $this->retoRealRepository->update($existing)]);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Error al actualizar reto real: ' . $e->getMessage()]);
             }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
+            return;
         }
+
+        // -- Solicitudes DELETE --
+        if ($method === 'DELETE') {
+            try {
+                 // Validar que el payload no sea nulo y contenga el ID
+                if (json_last_error() !== JSON_ERROR_NONE || !isset($payload['id'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Datos inválidos o ID no proporcionado para la eliminación.']);
+                    return;
+                }
+
+                $id = (int)$payload['id'];
+                if ($id === 0) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'ID de reto real no válido para la eliminación.']);
+                    return;
+                }
+                echo json_encode(['success' => $this->retoRealRepository->delete($id)]);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Error al eliminar reto real: ' . $e->getMessage()]);
+            }
+            return;
+        }
+
+        // Si el método HTTP no es manejado
+        http_response_code(405); // Method Not Allowed
+        echo json_encode(['error' => 'Método no permitido.']);
     }
 
     /**
-     * Elimina un reto real.
-     * Endpoint: DELETE /retos/{id}
+     * Convierte un objeto RetoReal a un array asociativo para la respuesta JSON.
+     * @param RetoReal $retoReal
+     * @return array
      */
-    public function deleteReto(int $id): void
+    public function retoRealToArray(RetoReal $retoReal): array
     {
-        try {
-            if ($this->retoRealRepository->delete($id)) {
-                $this->sendResponse(200, ['message' => 'Reto Real eliminado exitosamente.']);
-            } else {
-                $this->sendResponse(404, ['message' => 'Reto Real no encontrado o error al eliminar.']);
-            }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
+        return [
+            'retoId' => $retoReal->getRetoId(),
+            'tipo' => $retoReal->getTipo(),
+            'titulo' => $retoReal->getTitulo(),
+            'descripcion' => $retoReal->getDescripcion(),
+            'dificultad' => $retoReal->getDificultad(),
+            'areasConocimiento' => $retoReal->getAreasConocimiento(),
+            'entidadColaboradora' => $retoReal->getEntidadColaboradora()
+        ];
     }
 
     /**
-     * Obtiene todos los retos (reales).
-     * Endpoint: GET /retos
-     * Nota: Este método listaría solo los retos reales si el repositorio solo maneja ese tipo.
-     * Para listar ambos tipos (reales y experimentales), se necesitaría un 'RetoGeneralRepository' o similar.
+     * Consulta los equipos que trabajan en un reto real específico.
+     * Este método es llamado internamente desde handle() para la acción GET.
+     * Endpoint conceptual: GET /retos?action=get_equipos_by_reto&id={retoId}
+     * @param int $retoId
      */
-    public function getRetos(): void
-    {
-        try {
-            $retos = $this->retoRealRepository->findAll();
-            $this->sendResponse(200, $retos);
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Consulta los equipos que trabajan en un reto específico.
-     * Endpoint: GET /retos/{id}/equipos
-     */
-    public function getEquiposByRetoId(int $retoId): void
+    private function getEquiposByRetoId(int $retoId): void
     {
         try {
             // Primero, verificar si el reto existe
             $reto = $this->retoRealRepository->findById($retoId);
             if (!$reto) {
-                $this->sendResponse(404, ['message' => 'Reto no encontrado.']);
+                http_response_code(404);
+                echo json_encode(['message' => 'Reto Real no encontrado.']);
                 return;
             }
 
@@ -242,31 +209,15 @@ class RetoRealController
             $stmt->execute();
             $equiposAsignados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Preparar el conteo de miembros
-            // Nota: La forma de contar miembros usando JSON_CONTAINS es para MySQL 5.7+
-            // Y asume que participante_ids en la tabla 'equipos' es un JSON array de IDs numéricos.
-            // Si los IDs en participante_ids no son numéricos o el formato es diferente,
-            // esta parte puede necesitar ajustes. Para MySQL 8+, se puede usar JSON_TABLE o JSON_OVERLAPS.
-
-            $this->sendResponse(200, [
+            echo json_encode([
                 'retoId' => $retoId,
                 'titulo' => $reto->getTitulo(),
                 'equiposAsignados' => $equiposAsignados
             ]);
 
         } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
+            http_response_code(500);
+            echo json_encode(['error' => 'Error interno del servidor: ' . $e->getMessage()]);
         }
-    }
-
-
-    /**
-     * Envía una respuesta JSON.
-     */
-    private function sendResponse(int $statusCode, array $data): void
-    {
-        http_response_code($statusCode);
-        header('Content-Type: application/json');
-        echo json_encode($data);
     }
 }
