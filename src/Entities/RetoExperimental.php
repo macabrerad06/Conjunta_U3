@@ -6,23 +6,23 @@ namespace App\Entities;
 
 class RetoExperimental extends Reto
 {
-    private string $enfoque;
+    private string $enfoquePedagogico;
 
-    public function __construct(int $idReto, string $titulo, string $tipo, string $descripcion, string $dificultad, string $estado, array $areasConocimiento, string $enfoque)
+    public function __construct(int $idReto, string $titulo, string $tipo, string $descripcion, string $dificultad, string $estado, array $areasConocimiento, string $enfoquePedagogico)
     {
         parent::__construct($idReto, $titulo, $tipo, $descripcion, $dificultad, $estado, $areasConocimiento);
-        $this->enfoque = $enfoque;
+        $this->enfoquePedagogico = $enfoquePedagogico;
     }
 
     //getters
-    public function getEnfoque(): string
+    public function getEnfoquePedagogico(): string
     {
-        return $this->enfoque;
+        return $this->enfoquePedagogico;
     }
 
     //setters
-    public function setEnfoque(string $enfoque): void
+    public function setEnfoquePedagogico(string $enfoquePedagogico): void
     {
-        $this->enfoque = $enfoque;
+        $this->enfoquePedagogico = $enfoquePedagogico;
     }
 }

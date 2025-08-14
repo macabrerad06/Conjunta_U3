@@ -6,22 +6,22 @@ namespace App\Entities;
 
 class RetoReal extends Reto
 {
-    private string $entidad;
+    private string $entidadColaboradora;
 
-    public function __construct(int $idReto, string $titulo, string $tipo, string $descripcion, string $dificultad, string $estado, array $areasConocimiento, string $entidad)
+    public function __construct(int $idReto, string $titulo, string $tipo, string $descripcion, string $dificultad, string $estado, array $areasConocimiento, string $entidadColaboradora)
     {
         parent::__construct($idReto, $titulo, $tipo, $descripcion, $dificultad, $estado, $areasConocimiento);
-        $this->entidad = $entidad;
+        $this->entidadColaboradora = $entidadColaboradora;
     }
 
     //getters
-    public function getEntidad(): string
+    public function getEntidadColaboradora(): string
     {
-        return $this->entidad;
+        return $this->entidadColaboradora;
     }
     //setters
-    public function setEntidad(string $entidad): void
+    public function setEntidadColaboradora(string $entidadColaboradora): void
     {
-        $this->entidad = $entidad;
+        $this->entidadColaboradora = $entidadColaboradora;
     }
 }
