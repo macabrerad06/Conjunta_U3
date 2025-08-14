@@ -6,6 +6,7 @@ namespace App\Entities;
 
 abstract class Participante
 {
+    private int $idParticipante;
     private string $tipo;
     private string $nombre;
     private string $email;
@@ -21,7 +22,46 @@ abstract class Participante
 
 
     //getters
-    
+    public function getIdParticipante(): int
+    {
+        return $this->idParticipante;
+    }
+    public function getTipo(): string
+    {
+        return $this->tipo;
+    }
+    public function getNombre(): string
+    {
+        return $this->nombre;
+    }
+    public function getEmail(): string
+    {
+        return $this->email;
+    }
+    public function getNivelHabilidad(): string
+    {
+        return $this->nivelHabilidad;
+    }
 
     //setters
+    public function setIdParticipante(int $idParticipante): void
+    {
+        $this->idParticipante = $idParticipante;
+    }
+    public function setTipo(string $tipo): void
+    {
+        $this->tipo = $tipo;
+    }
+    public function setNombre(string $nombre): void
+    {
+        $this->nombre = $nombre;
+    }
+    public function setEmail(string $email): void
+    {
+        $this->email = $email;
+    }
+    public function setNivelHabilidad(string $nivelHabilidad): void
+    {
+        $this->nivelHabilidad = $nivelHabilidad;
+    }
 }

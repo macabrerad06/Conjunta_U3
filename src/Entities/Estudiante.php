@@ -21,7 +21,7 @@ class Estudiante extends Participante
         int $tiempoDisponibleSemanal,
         array $habilidades
     ) {
-        parent::__construct($tipo, $nombre, $email, $nivelHabilidad);
+        parent::__construct($idParticipante, $tipo, $nombre, $email, $nivelHabilidad);
         $this->grado = $grado;
         $this->institucion = $institucion;
         $this->tiempoDisponibleSemanal = $tiempoDisponibleSemanal;
@@ -29,9 +29,42 @@ class Estudiante extends Participante
     }
 
     //getters
-    
+    public function getGrado(): int
+    {
+        return $this->grado;
+    }
+    public function getInstitucion(): string
+    {
+        return $this->institucion;
+    }
+    public function getTiempoDisponibleSemanal(): int
+    {
+        return $this->tiempoDisponibleSemanal;
+    }
+    public function getHabilidades(): array
+    {
+        return $this->habilidades;
+    }
 
     //setters
+    public function setGrado(int $grado): void
+    {
+        $this->grado = $grado;
+    }
 
+    public function setInstitucion(string $institucion): void
+    {
+        $this->institucion = $institucion;
+    }
+
+    public function setTiempoDisponibleSemanal(int $tiempoDisponibleSemanal): void
+    {
+        $this->tiempoDisponibleSemanal = $tiempoDisponibleSemanal;
+    }
+
+    public function setHabilidades(array $habilidades): void
+    {
+        $this->habilidades = $habilidades;
+    }
 
 }

@@ -19,7 +19,7 @@ class MentorTecnico extends Participante
         int $experiencia,
         string $disponibilidadHoraria
     ) {
-        parent::__construct($tipo, $nombre, $email, $nivelHabilidad);
+        parent::__construct($idParticipante, $tipo, $nombre, $email, $nivelHabilidad);
         $this->especialidad = $especialidad;
         $this->experiencia = $experiencia;
         $this->disponibilidadHoraria = $disponibilidadHoraria;
