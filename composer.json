@@ -1,5 +1,5 @@
 {
-    "name": "usuario/conjuntaU3",
+    "name": "usuario/conjunta",
     "autoload": {
         "psr-4": {
             "App\\": "src/"
