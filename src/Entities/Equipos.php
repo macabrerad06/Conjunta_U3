@@ -7,12 +7,14 @@ namespace App\Entities;
 class Equipos{
     private int $idEquipo;
     private string $nombre;
+    private string $hackathon;
     private array $participantes;
 
-    public function __construct(int $idEquipo, string $nombre, array $participantes)
+    public function __construct(int $idEquipo, string $nombre, string $hackathon, array $participantes)
     {
         $this->idEquipo = $idEquipo;
         $this->nombre = $nombre;
+        $this->hackathon = $hackathon;
         $this->participantes = $participantes;
     }
 
@@ -32,6 +34,11 @@ class Equipos{
         return $this->participantes;
     }
 
+    public function getHackathon(): string
+    {
+        return $this->hackathon;
+    }
+
     // Setters
     public function setIdEquipo(int $idEquipo): void
     {
@@ -46,5 +53,9 @@ class Equipos{
     public function setParticipantes(array $participantes): void
     {
         $this->participantes = $participantes;
+    }
+    public function setHackathon(string $hackathon): void
+    {
+        $this->hackathon = $hackathon;
     }
 }
