@@ -88,8 +88,8 @@ Ext.define('EduHack.view.equipos.EquiposPanel', {
                             console.log('Asignando reto a equipo:', values);
 
                             Ext.Ajax.request({
-                                url: 'api/equipo_reto.php', // ¡URL actualizada!
-                                method: 'POST', // O PUT, dependiendo de tu diseño REST
+                                url: 'api/equipo_reto.php',
+                                method: 'POST',
                                 jsonData: values,
                                 success: function(response) {
                                     var res = Ext.decode(response.responseText);
@@ -121,7 +121,7 @@ Ext.define('EduHack.view.equipos.EquiposPanel', {
                 fields: ['idEquipo', 'nombre', 'hackathon_id', 'participante_ids'],
                 proxy: {
                     type: 'ajax',
-                    url: 'api/equipos.php', // ¡URL actualizada para GET!
+                    url: 'api/equipos.php',
                     reader: {
                         type: 'json',
                         rootProperty: 'data',
