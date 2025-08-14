@@ -12,6 +12,7 @@ class Estudiante extends Participante
     private array $habilidades;
 
     public function __construct(
+        int $idParticipante,
         string $tipo,
         string $nombre,
         string $email,
