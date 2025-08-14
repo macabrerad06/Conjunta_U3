@@ -6,29 +6,29 @@ USE eduhack;
 CREATE TABLE participante (
     id VARCHAR(100) PRIMARY KEY,
     tipo ENUM('estudiante', 'mentor') NOT NULL,
-    nombre VARCHAR(100) NOT NULL,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    nivelHabilidad VARCHAR(50)
+    nombre VARCHAR(20) NOT NULL,
+    email VARCHAR(20) NOT NULL UNIQUE,
+    nivelHabilidad VARCHAR(20)
 );
 
 CREATE TABLE estudiante (
-    participanteId VARCHAR(255) PRIMARY KEY,
-    grado VARCHAR(50),
+    participanteId VARCHAR(100) PRIMARY KEY,
+    grado VARCHAR(20),
     institucion VARCHAR(255),
     tiempoDisponibleSemanal INT,
-    FOREIGN KEY (participanteId) REFERENCES participantes(id)
+    FOREIGN KEY (participanteId) REFERENCES participante(id)
 );
 
 CREATE TABLE mentorTecnico (
-    participanteId VARCHAR(255) PRIMARY KEY,
+    participanteId VARCHAR(100) PRIMARY KEY,
     especialidad VARCHAR(255),
     experiencia INT,
-    disponibilidadHoraria VARCHAR(255),
-    FOREIGN KEY (participanteId) REFERENCES participantes(id)
+    disponibilidadHoraria VARCHAR(50),
+    FOREIGN KEY (participanteId) REFERENCES participante(id)
 );
 
 CREATE TABLE reto (
-    id VARCHAR(255) PRIMARY KEY,
+    id VARCHAR(100) PRIMARY KEY,
     tipo ENUM('real', 'experimental') NOT NULL,
     titulo VARCHAR(255) NOT NULL,
     descripcion TEXT,
@@ -39,13 +39,13 @@ CREATE TABLE reto (
 CREATE TABLE retoReal (
     retoId VARCHAR(255) PRIMARY KEY,
     entidadColaboradora VARCHAR(255),
-    FOREIGN KEY (retoId) REFERENCES retos(id)
+    FOREIGN KEY (retoId) REFERENCES reto(id)
 );
 
 CREATE TABLE retoExperimental (
     retoId VARCHAR(255) PRIMARY KEY,
     enfoquePedagogico VARCHAR(255),
-    FOREIGN KEY (retoId) REFERENCES retos(id)
+    FOREIGN KEY (retoId) REFERENCES reto(id)
 );
 
 CREATE TABLE equipos (
@@ -54,19 +54,19 @@ CREATE TABLE equipos (
     hackathonId VARCHAR(50) NOT NULL
 );
 
-CREATE TABLE equipos_participantes (
+CREATE TABLE equipo_participantes (
     equipoId INT,
     participanteId VARCHAR(255),
     PRIMARY KEY (equipoId, participanteId),
     FOREIGN KEY (equipoId) REFERENCES equipos(id),
-    FOREIGN KEY (participanteId) REFERENCES participantes(id)
+    FOREIGN KEY (participanteId) REFERENCES participante(id)
 );
 
-CREATE TABLE equipos_retos (
+CREATE TABLE equipo_reto (
     equipoId VARCHAR(255),
     retoId VARCHAR(255),
     estado ENUM('estudiante', 'mentor') DEFAULT 'en_progreso',
     PRIMARY KEY (equipoId, retoId),
     FOREIGN KEY (equipoId) REFERENCES equipos(id),
-    FOREIGN KEY (retoId) REFERENCES retos(id)
+    FOREIGN KEY (retoId) REFERENCES reto(id)
 );
