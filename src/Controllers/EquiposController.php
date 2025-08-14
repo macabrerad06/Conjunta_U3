@@ -22,165 +22,195 @@ class EquiposController
     }
 
     /**
-     * Maneja las solicitudes HTTP entrantes y las dirige al método apropiado.
-     * Esto simula un enrutador básico para la API.
+     * Maneja todas las solicitudes HTTP para el recurso de Equipos.
+     * Implementa un enrutamiento interno basado en el método HTTP y parámetros.
      */
-    public function handleRequest(string $method, string $path, array $params = []): void
+    public function handle(): void
     {
-        // Simple enrutamiento basado en método y parte de la URL
-        switch ($method) {
-            case 'POST':
-                if ($path === '/equipos') {
-                    $this->createEquipo();
-                }
-                break;
-            case 'GET':
-                if ($path === '/equipos') {
-                    $this->getEquipos();
-                } elseif (preg_match('/^\/equipos\/(\d+)\/retos$/', $path, $matches)) {
-                    $equipoId = (int) $matches[1];
+        header('Content-Type: application/json');
+        $method = $_SERVER['REQUEST_METHOD'];
+        $payload = json_decode(file_get_contents('php://input'), true);
+
+        // -- GET requests --
+        if ($method === 'GET') {
+            if (isset($_GET['action'])) {
+                // Específicamente para /equipos/{id}/retos (simulado con ?action=get_retos_by_equipo&id={id})
+                if ($_GET['action'] === 'get_retos_by_equipo' && isset($_GET['id'])) {
+                    $equipoId = (int)$_GET['id'];
                     $this->getRetosByEquipoId($equipoId);
-                } elseif (preg_match('/^\/equipos\/(\d+)$/', $path, $matches)) {
-                    $equipoId = (int) $matches[1];
-                    $this->getEquipoById($equipoId);
+                    return;
                 }
-                break;
-            case 'PUT':
-                if (preg_match('/^\/equipos\/(\d+)\/asignar-reto$/', $path, $matches)) {
-                    $equipoId = (int) $matches[1];
-                    $this->assignRetoToEquipo($equipoId);
-                }
-                break;
-            case 'DELETE':
-                if (preg_match('/^\/equipos\/(\d+)$/', $path, $matches)) {
-                    $equipoId = (int) $matches[1];
-                    $this->deleteEquipo($equipoId);
-                }
-                break;
-            default:
-                $this->sendResponse(405, ['message' => 'Method Not Allowed']);
-                break;
+            } elseif (isset($_GET['id'])) {
+                // Para /equipos/{id}
+                $equipo = $this->equiposRepository->findById((int)$_GET['id']);
+                echo json_encode($equipo ? $this->equipoToArray($equipo) : null);
+                return;
+            } else {
+                // Para /equipos (listar todos)
+                $list = array_map(
+                    [$this, 'equipoToArray'],
+                    $this->equiposRepository->findAll()
+                );
+                echo json_encode($list);
+            }
+            return;
         }
+
+        // -- POST requests --
+        if ($method === 'POST') {
+            try {
+                // Validar que el payload no sea nulo y contenga los campos esperados
+                if (json_last_error() !== JSON_ERROR_NONE || !isset($payload['nombre'], $payload['hackathonId'], $payload['participanteIds'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid or incomplete data provided.']);
+                    return;
+                }
+
+                $equipo = new Equipos(
+                    0, // ID placeholder, será asignado por la DB si es AUTO_INCREMENT
+                    $payload['nombre'],
+                    $payload['hackathonId'],
+                    $payload['participanteIds']
+                );
+                echo json_encode(['success' => $this->equiposRepository->create($equipo)]);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Error creating team: ' . $e->getMessage()]);
+            }
+            return;
+        }
+
+        // -- PUT requests --
+        if ($method === 'PUT') {
+            try {
+                // Validar que el payload no sea nulo
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON input.']);
+                    return;
+                }
+
+                if (isset($_GET['action'])) {
+                    // Específicamente para /equipos/{id}/asignar-reto (simulado con ?action=assign_reto)
+                    if ($_GET['action'] === 'assign_reto') {
+                        $equipoId = (int)($payload['id'] ?? 0); // Equipo ID del payload
+                        $retoIds = $payload['retoIds'] ?? [];   // Reto IDs del payload
+                        $this->assignRetoToEquipo($equipoId, $retoIds);
+                        return;
+                    }
+                }
+
+                // Para /equipos/{id} (actualizar equipo)
+                $id = (int)($payload['id'] ?? 0);
+                if ($id === 0) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'ID not provided for update.']);
+                    return;
+                }
+
+                $existing = $this->equiposRepository->findById($id);
+
+                if (!$existing) {
+                    http_response_code(404);
+                    echo json_encode(['error' => 'Team not found.']);
+                    return;
+                }
+
+                if (isset($payload['nombre'])) $existing->setNombre($payload['nombre']);
+                if (isset($payload['hackathonId'])) $existing->setHackathon($payload['hackathonId']);
+                // Recuerda que 'participantes' es un array que se serializa/deserializa
+                if (isset($payload['participanteIds']) && is_array($payload['participanteIds'])) {
+                    $existing->setParticipantes($payload['participanteIds']);
+                }
+
+                echo json_encode(['success' => $this->equiposRepository->update($existing)]);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Error updating team: ' . $e->getMessage()]);
+            }
+            return;
+        }
+
+        // -- DELETE requests --
+        if ($method === 'DELETE') {
+            try {
+                // Validar que el payload no sea nulo
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON input.']);
+                    return;
+                }
+                
+                $id = (int)($payload['id'] ?? 0);
+                if ($id === 0) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'ID not provided for deletion.']);
+                    return;
+                }
+                echo json_encode(['success' => $this->equiposRepository->delete($id)]);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Error deleting team: ' . $e->getMessage()]);
+            }
+            return;
+        }
+
+        http_response_code(405); // Method Not Allowed
+        echo json_encode(['error' => 'Method not allowed.']);
     }
 
     /**
-     * Crea un nuevo equipo.
-     * Endpoint: POST /equipos
-     * Body: { "nombre": "...", "hackathonId": "...", "participanteIds": [...] }
+     * Convierte un objeto Equipo a un array asociativo.
+     * @param Equipos $equipo
+     * @return array
      */
-    public function createEquipo(): void
+    public function equipoToArray(Equipos $equipo): array
     {
-        $input = json_decode(file_get_contents('php://input'), true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->sendResponse(400, ['message' => 'Invalid JSON input.']);
-            return;
-        }
-
-        $requiredFields = ['nombre', 'hackathonId', 'participanteIds'];
-        foreach ($requiredFields as $field) {
-            if (!isset($input[$field])) {
-                $this->sendResponse(400, ['message' => "Missing required field: {$field}"]);
-                return;
-            }
-        }
-
-        try {
-            // Generar un ID de equipo (asumiendo que es AUTO_INCREMENT en la DB)
-            // Para este ejemplo, usaremos un ID ficticio o dejaremos que la DB lo genere.
-            // Si tu ID de equipo es auto-incremental, no lo necesitas en el constructor.
-            // Ajustamos el constructor según la entidad `Equipos` que proporcionaste.
-            // La entidad `Equipos` toma `idEquipo` en el constructor.
-            // Si es auto-incremental, el ID se asignará después de la inserción.
-            // Por ahora, asumimos que el ID se asigna en la creación o es un placeholder.
-            // Si 'idEquipo' es auto-increment, se puede pasar 0 y actualizar después de la inserción
-            // o tu entidad/repositorio podría manejarlo internamente.
-            // Aquí, lo creamos con 0 y el repositorio lo manejaría si está configurado para auto-incremento.
-            $equipo = new Equipos(
-                0, // El ID se establecerá al insertar en la DB si es auto-incremental
-                $input['nombre'],
-                $input['hackathonId'],
-                $input['participanteIds']
-            );
-
-            if ($this->equiposRepository->create($equipo)) {
-                // Si el idEquipo es auto_increment, podrías recuperarlo aquí:
-                // $equipoId = $this->connection->lastInsertId();
-                $this->sendResponse(201, ['message' => 'Equipo creado exitosamente.']);
-            } else {
-                $this->sendResponse(500, ['message' => 'Error al crear el equipo.']);
-            }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
+        return [
+            'idEquipo' => $equipo->getIdEquipo(),
+            'nombre' => $equipo->getNombre(),
+            'hackathon' => $equipo->getHackathon(),
+            'participantes' => $equipo->getParticipantes() // Ya debería ser un array deserializado
+        ];
     }
 
-
-    public function getEquipos(): void
+    /**
+     * Asigna uno o más retos a un equipo.
+     * Este método es llamado internamente desde handle() para la acción PUT.
+     * Endpoint conceptual: PUT /equipos?action=assign_reto (con id y retoIds en el payload)
+     * @param int $equipoId
+     * @param array $retoIds
+     */
+    private function assignRetoToEquipo(int $equipoId, array $retoIds): void
     {
         try {
-            $equipos = $this->equiposRepository->findAll();
-            $this->sendResponse(200, $equipos);
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-
-    public function getEquipoById(int $id): void
-    {
-        try {
-            $equipo = $this->equiposRepository->findById($id);
-            if ($equipo) {
-                $this->sendResponse(200, $equipo);
-            } else {
-                $this->sendResponse(404, ['message' => 'Equipo no encontrado.']);
-            }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-
-    public function assignRetoToEquipo(int $equipoId): void
-    {
-        $input = json_decode(file_get_contents('php://input'), true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->sendResponse(400, ['message' => 'Invalid JSON input.']);
-            return;
-        }
-
-        if (!isset($input['retoIds']) || !is_array($input['retoIds'])) {
-            $this->sendResponse(400, ['message' => 'Missing or invalid "retoIds" array.']);
-            return;
-        }
-
-        try {
+            // Verificar si el equipo existe
             $equipo = $this->equiposRepository->findById($equipoId);
             if (!$equipo) {
-                $this->sendResponse(404, ['message' => 'Equipo no encontrado.']);
+                http_response_code(404);
+                echo json_encode(['message' => 'Equipo no encontrado.']);
                 return;
             }
 
-            $this->connection->beginTransaction(); 
+            $this->connection->beginTransaction(); // Iniciar transacción
 
             $success = true;
-            foreach ($input['retoIds'] as $retoId) {
+            foreach ($retoIds as $retoId) {
+                // Verificar si la asignación ya existe para evitar duplicados
                 $checkSql = "SELECT COUNT(*) FROM equipo_reto WHERE equipo_id = :equipoId AND reto_id = :retoId";
                 $checkStmt = $this->connection->prepare($checkSql);
                 $checkStmt->execute([':equipoId' => $equipoId, ':retoId' => $retoId]);
                 if ($checkStmt->fetchColumn() > 0) {
-                    continue; 
+                    continue; // La asignación ya existe, saltar
                 }
 
-
+                // Insertar en la tabla pivote equipo_reto
                 $sql = "INSERT INTO equipo_reto (equipo_id, reto_id, estado) VALUES (:equipoId, :retoId, :estado)";
                 $stmt = $this->connection->prepare($sql);
                 if (!$stmt->execute([
                     ':equipoId' => $equipoId,
                     ':retoId' => $retoId,
-                    ':estado' => 'en_progreso' 
+                    ':estado' => 'en_progreso' // Estado inicial
                 ])) {
                     $success = false;
                     break;
@@ -189,28 +219,38 @@ class EquiposController
 
             if ($success) {
                 $this->connection->commit();
-                $this->sendResponse(200, ['message' => 'Retos asignados exitosamente al equipo.']);
+                echo json_encode(['success' => true, 'message' => 'Retos asignados exitosamente al equipo.']);
             } else {
                 $this->connection->rollBack();
-                $this->sendResponse(500, ['message' => 'Error al asignar retos al equipo.']);
+                http_response_code(500);
+                echo json_encode(['success' => false, 'message' => 'Error al asignar retos al equipo.']);
             }
 
         } catch (Exception $e) {
-            $this->connection->rollBack(); 
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
+            $this->connection->rollBack(); // Revertir en caso de error
+            http_response_code(500);
+            echo json_encode(['error' => 'Error interno del servidor: ' . $e->getMessage()]);
         }
     }
 
-
-    public function getRetosByEquipoId(int $equipoId): void
+    /**
+     * Consulta los retos asignados a un equipo específico.
+     * Este método es llamado internamente desde handle() para la acción GET.
+     * Endpoint conceptual: GET /equipos?action=get_retos_by_equipo&id={equipoId}
+     * @param int $equipoId
+     */
+    private function getRetosByEquipoId(int $equipoId): void
     {
         try {
+            // Verificar si el equipo existe
             $equipo = $this->equiposRepository->findById($equipoId);
             if (!$equipo) {
-                $this->sendResponse(404, ['message' => 'Equipo no encontrado.']);
+                http_response_code(404);
+                echo json_encode(['message' => 'Equipo no encontrado.']);
                 return;
             }
 
+            // Realizar JOIN para obtener los retos asignados
             $sql = "SELECT r.id, r.titulo, r.tipo, r.descripcion, r.dificultad, er.estado
                     FROM equipo_reto er
                     JOIN retos r ON er.reto_id = r.id
@@ -220,75 +260,15 @@ class EquiposController
             $stmt->execute();
             $retosAsignados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $this->sendResponse(200, [
+            echo json_encode([
                 'equipoId' => $equipoId,
                 'nombre' => $equipo->getNombre(),
                 'retosAsignados' => $retosAsignados
             ]);
 
         } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
+            http_response_code(500);
+            echo json_encode(['error' => 'Error interno del servidor: ' . $e->getMessage()]);
         }
-    }
-
-    public function deleteEquipo(int $id): void
-    {
-        try {
-            if ($this->equiposRepository->delete($id)) {
-                $this->sendResponse(200, ['message' => 'Equipo eliminado exitosamente.']);
-            } else {
-                $this->sendResponse(404, ['message' => 'Equipo no encontrado o error al eliminar.']);
-            }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Envía una respuesta JSON.
-     */
-    private function sendResponse(int $statusCode, array $data): void
-    {
-        http_response_code($statusCode);
-        header('Content-Type: application/json');
-        echo json_encode($data);
     }
 }
-
-// Ejemplo de uso (simulando una solicitud HTTP)
-// if (basename($_SERVER['PHP_SELF']) === 'index.php') { // Asegura que solo se ejecute al acceder directamente
-//     $controller = new EquiposController();
-//
-//     // Simular una solicitud POST para crear un equipo
-//     // $_SERVER['REQUEST_METHOD'] = 'POST';
-//     // $_SERVER['REQUEST_URI'] = '/equipos';
-//     // file_put_contents('php://input', json_encode([
-//     //     'nombre' => 'EcoHackers',
-//     //     'hackathonId' => 'eduhack2025',
-//     //     'participanteIds' => [1, 2, 5] // IDs numéricos de participantes
-//     // ]));
-//     // $controller->handleRequest($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
-//
-//     // Simular una solicitud GET para listar equipos
-//     // $_SERVER['REQUEST_METHOD'] = 'GET';
-//     // $_SERVER['REQUEST_URI'] = '/equipos';
-//     // $controller->handleRequest($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
-//
-//     // Simular una solicitud PUT para asignar retos
-//     // $_SERVER['REQUEST_METHOD'] = 'PUT';
-//     // $_SERVER['REQUEST_URI'] = '/equipos/1/asignar-reto'; // Suponiendo ID de equipo 1
-//     // file_put_contents('php://input', json_encode([
-//     //     'retoIds' => [101, 102] // IDs numéricos de retos
-//     // ]));
-//     // $controller->handleRequest($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
-//
-//     // Simular una solicitud GET para obtener retos de un equipo
-//     // $_SERVER['REQUEST_METHOD'] = 'GET';
-//     // $_SERVER['REQUEST_URI'] = '/equipos/1/retos'; // Suponiendo ID de equipo 1
-//     // $controller->handleRequest($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
-//
-//     // Simular una solicitud DELETE para eliminar un equipo
-//     // $_SERVER['REQUEST_METHOD'] = 'DELETE';
-//     // $_SERVER['REQUEST_URI'] = '/equipos/1'; // Suponiendo ID de equipo 1
-//     // $controller->handleRequest($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
-// }

@@ -6,7 +6,7 @@ namespace App\Controllers;
 
 use App\Entities\RetoExperimental;
 use App\Repositories\RetoExperimentalRepository;
-use App\config\Database; // Necesario para interactuar con tablas relacionadas (ej. equipo_reto)
+use App\config\Database; // Necesario para la conexión a la base de datos para la tabla pivote
 use PDO;
 use Exception;
 
@@ -22,206 +22,178 @@ class RetoExperimentalController
     }
 
     /**
-     * Maneja las solicitudes HTTP entrantes y las dirige al método apropiado.
-     * Simula un enrutador básico para la API.
+     * Maneja todas las solicitudes HTTP para el recurso de RetoExperimental.
+     * Implementa un enrutamiento interno basado en el método HTTP y parámetros.
      */
-    public function handleRequest(string $method, string $path, array $params = []): void
+    public function handle(): void
     {
-        switch ($method) {
-            case 'POST':
-                if ($path === '/retos') {
-                    $this->createReto();
-                }
-                break;
-            case 'GET':
-                if ($path === '/retos') {
-                    $this->getRetos();
-                } elseif (preg_match('/^\/retos\/(\d+)$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
-                    $this->getRetoById($retoId);
-                } elseif (preg_match('/^\/retos\/(\d+)\/equipos$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
+        header('Content-Type: application/json');
+        $method = $_SERVER['REQUEST_METHOD'];
+        // Para POST, PUT, DELETE, el payload se lee del cuerpo de la solicitud
+        $payload = json_decode(file_get_contents('php://input'), true);
+
+        // -- Solicitudes GET --
+        if ($method === 'GET') {
+            if (isset($_GET['action'])) {
+                // Específicamente para /retos/{id}/equipos (simulado con ?action=get_equipos_by_reto&id={id})
+                if ($_GET['action'] === 'get_equipos_by_reto' && isset($_GET['id'])) {
+                    $retoId = (int)$_GET['id'];
                     $this->getEquiposByRetoId($retoId);
+                    return;
                 }
-                break;
-            case 'PUT':
-                if (preg_match('/^\/retos\/(\d+)$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
-                    $this->updateReto($retoId);
-                }
-                break;
-            case 'DELETE':
-                if (preg_match('/^\/retos\/(\d+)$/', $path, $matches)) {
-                    $retoId = (int) $matches[1];
-                    $this->deleteReto($retoId);
-                }
-                break;
-            default:
-                $this->sendResponse(405, ['message' => 'Method Not Allowed']);
-                break;
-        }
-    }
-
-    /**
-     * Crea un nuevo reto experimental.
-     * Endpoint: POST /retos
-     * Body: { "tipo": "retoExperimental", "titulo": "...", "descripcion": "...", "dificultad": "...", "areasConocimiento": [...], "enfoquePedagogico": "..." }
-     */
-    public function createReto(): void
-    {
-        $input = json_decode(file_get_contents('php://input'), true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->sendResponse(400, ['message' => 'Invalid JSON input.']);
-            return;
-        }
-
-        // Validación básica de campos requeridos para RetoExperimental
-        $requiredFields = ['tipo', 'titulo', 'descripcion', 'dificultad', 'areasConocimiento', 'enfoquePedagogico'];
-        foreach ($requiredFields as $field) {
-            if (!isset($input[$field])) {
-                $this->sendResponse(400, ['message' => "Missing required field: {$field}"]);
+            } elseif (isset($_GET['id'])) {
+                // Obtener un reto experimental por ID: GET /retos?id={id}
+                $reto = $this->retoExperimentalRepository->findById((int)$_GET['id']);
+                echo json_encode($reto ? $this->retoExperimentalToArray($reto) : null);
                 return;
+            } else {
+                // Listar todos los retos experimentales: GET /retos
+                $list = array_map(
+                    [$this, 'retoExperimentalToArray'],
+                    $this->retoExperimentalRepository->findAll()
+                );
+                echo json_encode($list);
             }
-        }
-
-        if ($input['tipo'] !== 'retoExperimental') {
-            $this->sendResponse(400, ['message' => 'This controller only handles "retoExperimental" type.']);
             return;
         }
 
-        try {
-            // Se asume que el ID (retoId) es AUTO_INCREMENT en la DB y no se pasa al constructor inicialmente.
-            $reto = new RetoExperimental(
-                0, // ID placeholder, será asignado por la DB
-                $input['tipo'],
-                $input['titulo'],
-                $input['descripcion'],
-                $input['dificultad'],
-                $input['areasConocimiento'],
-                $input['enfoquePedagogico']
-            );
+        // -- Solicitudes POST --
+        if ($method === 'POST') {
+            try {
+                // Validar que el payload no sea nulo y contenga los campos esperados
+                if (json_last_error() !== JSON_ERROR_NONE ||
+                    !isset($payload['tipo'], $payload['titulo'], $payload['descripcion'],
+                           $payload['dificultad'], $payload['areasConocimiento'], $payload['enfoquePedagogico'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Datos inválidos o incompletos para crear un reto experimental.']);
+                    return;
+                }
 
-            if ($this->retoExperimentalRepository->create($reto)) {
-                $this->sendResponse(201, ['message' => 'Reto Experimental creado exitosamente.']);
-            } else {
-                $this->sendResponse(500, ['message' => 'Error al crear el Reto Experimental.']);
+                if ($payload['tipo'] !== 'retoExperimental') {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Este controlador solo maneja el tipo "retoExperimental" para la creación.']);
+                    return;
+                }
+
+                $retoExperimental = new RetoExperimental(
+                    0, // ID placeholder, será asignado por la DB si es AUTO_INCREMENT
+                    $payload['tipo'],
+                    $payload['titulo'],
+                    $payload['descripcion'],
+                    $payload['dificultad'],
+                    $payload['areasConocimiento'],
+                    $payload['enfoquePedagogico']
+                );
+
+                echo json_encode(['success' => $this->retoExperimentalRepository->create($retoExperimental)]);
+            } catch (Exception $e) {
+                http_response_code(400); // 400 Bad Request por problemas de datos o 500 para otros errores
+                echo json_encode(['error' => 'Error al crear reto experimental: ' . $e->getMessage()]);
             }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Obtiene un reto experimental por su ID.
-     * Endpoint: GET /retos/{id}
-     */
-    public function getRetoById(int $id): void
-    {
-        try {
-            $reto = $this->retoExperimentalRepository->findById($id);
-            if ($reto) {
-                $this->sendResponse(200, $reto);
-            } else {
-                $this->sendResponse(404, ['message' => 'Reto Experimental no encontrado.']);
-            }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Actualiza un reto experimental existente.
-     * Endpoint: PUT /retos/{id}
-     * Body: { "titulo": "...", "descripcion": "...", "dificultad": "...", "areasConocimiento": [...], "enfoquePedagogico": "..." }
-     */
-    public function updateReto(int $id): void
-    {
-        $input = json_decode(file_get_contents('php://input'), true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->sendResponse(400, ['message' => 'Invalid JSON input.']);
             return;
         }
 
-        try {
-            // Recuperar el reto existente para actualizar sus propiedades
-            $reto = $this->retoExperimentalRepository->findById($id);
-            if (!$reto) {
-                $this->sendResponse(404, ['message' => 'Reto Experimental no encontrado para actualizar.']);
-                return;
-            }
+        // -- Solicitudes PUT --
+        if ($method === 'PUT') {
+            try {
+                // Validar que el payload no sea nulo y contenga el ID
+                if (json_last_error() !== JSON_ERROR_NONE || !isset($payload['id'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Datos inválidos o ID no proporcionado para la actualización.']);
+                    return;
+                }
+                
+                $id = (int)$payload['id'];
+                if ($id === 0) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'ID de reto experimental no válido para la actualización.']);
+                    return;
+                }
 
-            // Actualizar solo los campos proporcionados en el input
-            if (isset($input['titulo'])) {
-                $reto->setTitulo($input['titulo']);
-            }
-            if (isset($input['descripcion'])) {
-                $reto->setDescripcion($input['descripcion']);
-            }
-            if (isset($input['dificultad'])) {
-                $reto->setDificultad($input['dificultad']);
-            }
-            if (isset($input['areasConocimiento'])) {
-                $reto->setAreasConocimiento($input['areasConocimiento']);
-            }
-            if (isset($input['enfoquePedagogico'])) {
-                $reto->setEnfoquePedagogico($input['enfoquePedagogico']);
-            }
+                $existing = $this->retoExperimentalRepository->findById($id);
 
-            if ($this->retoExperimentalRepository->update($reto)) {
-                $this->sendResponse(200, ['message' => 'Reto Experimental actualizado exitosamente.']);
-            } else {
-                $this->sendResponse(500, ['message' => 'Error al actualizar el Reto Experimental.']);
+                if (!$existing) {
+                    http_response_code(404);
+                    echo json_encode(['error' => 'Reto experimental no encontrado para actualizar.']);
+                    return;
+                }
+
+                // Actualizar solo los campos proporcionados en el payload
+                if (isset($payload['titulo'])) $existing->setTitulo($payload['titulo']);
+                if (isset($payload['descripcion'])) $existing->setDescripcion($payload['descripcion']);
+                if (isset($payload['dificultad'])) $existing->setDificultad($payload['dificultad']);
+                if (isset($payload['areasConocimiento'])) $existing->setAreasConocimiento($payload['areasConocimiento']);
+                if (isset($payload['enfoquePedagogico'])) $existing->setEnfoquePedagogico($payload['enfoquePedagogico']);
+
+                echo json_encode(['success' => $this->retoExperimentalRepository->update($existing)]);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Error al actualizar reto experimental: ' . $e->getMessage()]);
             }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
+            return;
         }
+
+        // -- Solicitudes DELETE --
+        if ($method === 'DELETE') {
+            try {
+                 // Validar que el payload no sea nulo y contenga el ID
+                if (json_last_error() !== JSON_ERROR_NONE || !isset($payload['id'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Datos inválidos o ID no proporcionado para la eliminación.']);
+                    return;
+                }
+
+                $id = (int)$payload['id'];
+                if ($id === 0) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'ID de reto experimental no válido para la eliminación.']);
+                    return;
+                }
+                echo json_encode(['success' => $this->retoExperimentalRepository->delete($id)]);
+            } catch (Exception $e) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Error al eliminar reto experimental: ' . $e->getMessage()]);
+            }
+            return;
+        }
+
+        // Si el método HTTP no es manejado
+        http_response_code(405); // Method Not Allowed
+        echo json_encode(['error' => 'Método no permitido.']);
     }
 
     /**
-     * Elimina un reto experimental.
-     * Endpoint: DELETE /retos/{id}
+     * Convierte un objeto RetoExperimental a un array asociativo para la respuesta JSON.
+     * @param RetoExperimental $retoExperimental
+     * @return array
      */
-    public function deleteReto(int $id): void
+    public function retoExperimentalToArray(RetoExperimental $retoExperimental): array
     {
-        try {
-            if ($this->retoExperimentalRepository->delete($id)) {
-                $this->sendResponse(200, ['message' => 'Reto Experimental eliminado exitosamente.']);
-            } else {
-                $this->sendResponse(404, ['message' => 'Reto Experimental no encontrado o error al eliminar.']);
-            }
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
+        return [
+            'retoId' => $retoExperimental->getRetoId(),
+            'tipo' => $retoExperimental->getTipo(),
+            'titulo' => $retoExperimental->getTitulo(),
+            'descripcion' => $retoExperimental->getDescripcion(),
+            'dificultad' => $retoExperimental->getDificultad(),
+            'areasConocimiento' => $retoExperimental->getAreasConocimiento(),
+            'enfoquePedagogico' => $retoExperimental->getEnfoquePedagogico()
+        ];
     }
 
     /**
-     * Obtiene todos los retos (experimentales).
-     * Endpoint: GET /retos
-     * Nota: Este método listaría solo los retos experimentales si el repositorio solo maneja ese tipo.
+     * Consulta los equipos que trabajan en un reto experimental específico.
+     * Este método es llamado internamente desde handle() para la acción GET.
+     * Endpoint conceptual: GET /retos?action=get_equipos_by_reto&id={retoId}
+     * @param int $retoId
      */
-    public function getRetos(): void
-    {
-        try {
-            $retos = $this->retoExperimentalRepository->findAll();
-            $this->sendResponse(200, $retos);
-        } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Consulta los equipos que trabajan en un reto específico.
-     * Endpoint: GET /retos/{id}/equipos
-     */
-    public function getEquiposByRetoId(int $retoId): void
+    private function getEquiposByRetoId(int $retoId): void
     {
         try {
             // Primero, verificar si el reto existe
             $reto = $this->retoExperimentalRepository->findById($retoId);
             if (!$reto) {
-                $this->sendResponse(404, ['message' => 'Reto no encontrado.']);
+                http_response_code(404);
+                echo json_encode(['message' => 'Reto Experimental no encontrado.']);
                 return;
             }
 
@@ -237,24 +209,15 @@ class RetoExperimentalController
             $stmt->execute();
             $equiposAsignados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $this->sendResponse(200, [
+            echo json_encode([
                 'retoId' => $retoId,
                 'titulo' => $reto->getTitulo(),
                 'equiposAsignados' => $equiposAsignados
             ]);
 
         } catch (Exception $e) {
-            $this->sendResponse(500, ['message' => 'Error interno del servidor: ' . $e->getMessage()]);
+            http_response_code(500);
+            echo json_encode(['error' => 'Error interno del servidor: ' . $e->getMessage()]);
         }
-    }
-
-    /**
-     * Envía una respuesta JSON.
-     */
-    private function sendResponse(int $statusCode, array $data): void
-    {
-        http_response_code($statusCode);
-        header('Content-Type: application/json');
-        echo json_encode($data);
     }
 }
