@@ -12,7 +12,7 @@ abstract class Participante
     private string $email;
     private String $nivelHabilidad;
 
-    public function __construct(string $tipo, string $nombre, string $email, string $nivelHabilidad)
+    public function __construct(int $idParticipante,string $tipo, string $nombre, string $email, string $nivelHabilidad)
     {
         $this->tipo = $tipo;
         $this->nombre = $nombre;

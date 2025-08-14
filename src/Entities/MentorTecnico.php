@@ -11,6 +11,7 @@ class MentorTecnico extends Participante
     private string $disponibilidadHoraria;
 
     public function __construct(
+        int $idParticipante,
         string $tipo,
         string $nombre,
         string $email,
